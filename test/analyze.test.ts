@@ -1,10 +1,11 @@
 import { analyze } from '@/analyze';
 import { parse } from '@/parse';
-import { SmfBinary, smfData } from '@/types';
+import { SmfBinary, SmfData } from '@/types';
+import { test, expect } from '@jest/globals';
 
 type analyzeTestCase = {
   input: SmfBinary,
-  output: smfData,
+  output: SmfData,
 };
 
 // テストケース
@@ -123,6 +124,26 @@ const loadTestCases = async () => {
   return testCases;
 };
 
-(async () => {
-  const testCases = await loadTestCases();
-})();
+let testCases: {header: analyzeTestCase[], metadata: analyzeTestCase[]};
+
+beforeAll(async () => {
+  testCases = await loadTestCases();
+});
+
+test('analyze header 4536.mid', () => {
+  const testCase = testCases.header[0];
+  const result = analyze(testCase.input);
+  expect(result).toEqual(testCase.output);
+});
+
+test('analyze header c.mid', () => {
+  const testCase = testCases.header[1];
+  const result = analyze(testCase.input);
+  expect(result).toEqual(testCase.output);
+});
+
+test('analyze header wagamachi.mid', () => {
+  const testCase = testCases.header[2];
+  const result = analyze(testCase.input);
+  expect(result).toEqual(testCase.output);
+});

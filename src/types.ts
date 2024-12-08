@@ -40,7 +40,7 @@ export type Header = {
   division: number;
 }
 
-export type smfData = {
+export type SmfData = {
   header: Header;
   tracks: Track;
 }
