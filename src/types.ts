@@ -42,5 +42,5 @@ export type Header = {
 
 export type SmfData = {
   header: Header;
-  tracks: Track;
+  track: Track;
 }

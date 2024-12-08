@@ -23,7 +23,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [],
             beats: [],
             notes: [],
@@ -38,7 +38,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [],
             beats: [],
             notes: [],
@@ -53,7 +53,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [],
             beats: [],
             notes: [],
@@ -70,7 +70,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [
               {bpm: 120, timing: 0}
             ],
@@ -89,7 +89,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [
               {bpm: 120, timing: 0}
             ],
@@ -108,7 +108,7 @@ const loadTestCases = async () => {
             tracks: 2,
             division: 480,
           },
-          tracks: {
+          track: {
             tempos: [
               {bpm: 110.00011000011, timing: 0}
             ],
@@ -130,20 +130,20 @@ beforeAll(async () => {
   testCases = await loadTestCases();
 });
 
-test('analyze header 4536.mid', () => {
-  const testCase = testCases.header[0];
+test('analyze metadata 4536.mid', () => {
+  const testCase = testCases.metadata[0];
   const result = analyze(testCase.input);
   expect(result).toEqual(testCase.output);
 });
 
-test('analyze header c.mid', () => {
-  const testCase = testCases.header[1];
+test('analyze metadata c.mid', () => {
+  const testCase = testCases.metadata[1];
   const result = analyze(testCase.input);
   expect(result).toEqual(testCase.output);
 });
 
-test('analyze header wagamachi.mid', () => {
-  const testCase = testCases.header[2];
+test('analyze metadata wagamachi.mid', () => {
+  const testCase = testCases.metadata[2];
   const result = analyze(testCase.input);
   expect(result).toEqual(testCase.output);
 });
