@@ -42,3 +42,11 @@ const testCases: ParseTestCase[] = [
     }
   }
 ];
+
+for (const testCase of testCases) {
+  test(`parse ${testCase.input}`, async () => {
+    const file = new File([testCase.input], testCase.input);
+    const result = await parse(file);
+    expect(result).toEqual(testCase.output);
+  });
+}
