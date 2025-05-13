@@ -1,4 +1,4 @@
-import { SmfBinary, SmfData, Header, Track, Note, Beat, Tempo } from "./types";
+import { SmfBinary, SmfData, Header, Track, Note, Beat, Tempo, ActivateNote, Octave, Scale } from "./types";
 
 const BYTE_SIGNAL_HEX = {
   NOTE_OFF: 0x80,
@@ -31,6 +31,8 @@ const META_EVENT_HEX = {
   SEQ_EVENT: 0x7f,
 }
 
+const ScaleList: Scale[] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
 class BufferReader {
   private buffer: ArrayBuffer;
   private cursor: number;
@@ -55,6 +57,11 @@ class BufferReader {
   addCursor(length: number): void {
     this.cursor += length;
   }
+}
+
+// TODO: 可変超数値表現によるdeltaTimeの取得
+const getDeltaTime = (deltaTime: number): number => {
+  return 0;
 }
 
 const getHeader = (headerBinary: ArrayBuffer): Header => {
@@ -129,6 +136,8 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
     }
   };
 
+  let activeNotes: ActivateNote[] = [];
+
   while(true){
     const quotient: number = trackReader.readUint8(1);
     if (quotient >= 0x80) {
@@ -136,13 +145,14 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
       deltaTime += (quotient - 128) * 128 + reminder;
     }
     const statusByte = trackReader.readUint8(1);
-    //console.log(statusByte);
+    // console.log(statusByte);
 
+    // TODO: この下を実装する
     switch (statusByte) {
       case BYTE_SIGNAL_HEX.META_EVENT: {
         const metaEvent = trackReader.readUint8(1);
         if (metaEvent === META_EVENT_HEX.END_OF_TRACK) {
-          //console.log("end of track");
+          // console.log("end of track");
           return { tempos, beats, notes };
         }
         if (metaEventHandlers[metaEvent]) {
@@ -163,11 +173,33 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
         break;
       }
       case BYTE_SIGNAL_HEX.NOTE_ON: {
-        trackReader.addCursor(2);
+        const note: number = trackReader.readUint8(1);
+        const velocity: number = trackReader.readUint8(1);
+        // note=30が3C(scale=C, octave=3)を基準に
+        const octave: Octave = Math.floor((note + 6)/12) as Octave;
+        const scale: Scale = ScaleList[(note + 6) % 12];
+        activeNotes.push({ scale, octave, timing: deltaTime, velocity });
         break;
       }
       case BYTE_SIGNAL_HEX.NOTE_OFF: {
-        trackReader.addCursor(2);
+        const noteOff: number = trackReader.readUint8(1);
+        const noteOffVelocity: number = trackReader.readUint8(1);
+        const octave: Octave = Math.floor((noteOff + 6)/12) as Octave;
+        const scale: Scale = ScaleList[(noteOff + 6) % 12];
+        const activeNoteIndex = activeNotes.findIndex((activeNote) => {
+          return activeNote.scale === scale && activeNote.octave === octave;
+        });
+        if (activeNoteIndex !== -1) {
+          const activeNote = activeNotes[activeNoteIndex];
+          notes.push({
+            scale: activeNote.scale,
+            octave: activeNote.octave,
+            timing: activeNote.timing,
+            length: deltaTime - activeNote.timing,
+            velocity: activeNote.velocity,
+          });
+          activeNotes.splice(activeNoteIndex, 1);
+        }
         break;
       }
     }
