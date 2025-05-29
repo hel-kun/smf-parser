@@ -139,13 +139,15 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
   let activeNotes: ActivateNote[] = [];
 
   while(true){
-    const quotient: number = trackReader.readUint8(1);
-    if (quotient >= 0x80) {
-      const reminder: number = trackReader.readUint8(1);
-      deltaTime += (quotient - 128) * 128 + reminder;
+    // 可変長数値
+    let delta = 0;
+    while (true) {
+      const byte = trackReader.readUint8(1);
+      delta = (delta << 7) | (byte & 0x7F);
+      if ((byte & 0x80) === 0) break;
     }
+    deltaTime += delta;
     const statusByte = trackReader.readUint8(1);
-    // console.log(statusByte);
 
     // TODO: この下を実装する
     switch (statusByte) {
@@ -175,17 +177,17 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
       case BYTE_SIGNAL_HEX.NOTE_ON: {
         const note: number = trackReader.readUint8(1);
         const velocity: number = trackReader.readUint8(1);
-        // note=30が3C(scale=C, octave=3)を基準に
-        const octave: Octave = Math.floor((note + 6)/12) as Octave;
-        const scale: Scale = ScaleList[(note + 6) % 12];
+        // note=30(16進数)が3C(scale=C, octave=3)を基準に
+        const octave: Octave = Math.floor(note/12)-1 as Octave;
+        const scale: Scale = ScaleList[note % 12];
         activeNotes.push({ scale, octave, timing: deltaTime, velocity });
         break;
       }
       case BYTE_SIGNAL_HEX.NOTE_OFF: {
-        const noteOff: number = trackReader.readUint8(1);
-        const noteOffVelocity: number = trackReader.readUint8(1);
-        const octave: Octave = Math.floor((noteOff + 6)/12) as Octave;
-        const scale: Scale = ScaleList[(noteOff + 6) % 12];
+        const note: number = trackReader.readUint8(1);
+        const noteOffVelocity: number = trackReader.readUint8(1); // 多分使わない
+        const octave: Octave = Math.floor(note/12)-1 as Octave;
+        const scale: Scale = ScaleList[note % 12]
         const activeNoteIndex = activeNotes.findIndex((activeNote) => {
           return activeNote.scale === scale && activeNote.octave === octave;
         });
@@ -203,6 +205,7 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
         break;
       }
     }
+    // console.log(tempos, beats, notes);
   }
   return { tempos, beats, notes };
 };
