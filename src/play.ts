@@ -20,7 +20,6 @@ export class SmfPlayer {
     
     for (let octave = -1; octave <= 9; octave++) {
       for (let i = 0; i < scales.length; i++) {
-        // A4を基準に半音ごとに2^(1/12)倍
         const n = (octave - 4) * 12 + i - 9; // A4からの半音数
         const freq = baseFrequency * Math.pow(2, n / 12);
         this.noteToFrequency.set(`${scales[i]}${octave}`, freq);
@@ -32,7 +31,10 @@ export class SmfPlayer {
     if (!this.audioContext) return;
 
     const division = this.smfData.header.division;
-    const tempo = this.smfData.track.tempos.length > 0 ? this.smfData.track.tempos[0].bpm : 120; // デフォルトのBPM
+    const tempos = this.smfData.track.tempos;
+    const tempo = tempos.reduce((prev, curr) => {
+      return curr.timing <= note.timing ? curr.bpm : prev;
+    }, tempos[0].bpm);
 
     const noteKey = `${note.scale}${note.octave}`;
     const noteStartTime = startTime + note.timing*60/(tempo*division);
@@ -45,28 +47,24 @@ export class SmfPlayer {
       return;
     }
 
-    // GB音源の特徴である矩形波（パルス波）を使用
     const oscillator = this.audioContext.createOscillator();
-    oscillator.type = 'square'; // GB音源の特徴的な音色
+    oscillator.type = 'square';
     oscillator.frequency.value = frequency;
 
-    // ベロシティに基づいて音量を調整
     const gainNode = this.audioContext.createGain();
     gainNode.gain.setValueAtTime(gainValue, noteStartTime);
     gainNode.gain.exponentialRampToValueAtTime(0.05, noteEndTime - 0.1);
     gainNode.gain.linearRampToValueAtTime(0, noteEndTime);
 
-    // 接続: オシレーター -> ゲイン -> 出力
+    // オシレーター -> ゲイン -> 出力
     oscillator.connect(gainNode).connect(this.audioContext.destination);
 
     oscillator.start(noteStartTime);
     oscillator.stop(noteEndTime);
 
-    // スケジュールされたノートを保存（停止時に使用）
     const id = Date.now() + Math.random();
     this.scheduledNotes.set(id, { oscillator, gain: gainNode });
 
-    // 終了時にマップから削除
     oscillator.onended = () => {
       this.scheduledNotes.delete(id);
     };
@@ -75,7 +73,6 @@ export class SmfPlayer {
   play() {
     if (this.isPlaying) return;
 
-    // AudioContextの初期化
     if (!this.audioContext) {
       this.audioContext = new AudioContext();
     } else if (this.audioContext.state === 'suspended') {
