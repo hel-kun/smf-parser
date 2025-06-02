@@ -1,19 +1,20 @@
-import { SmfBinary, SmfData, Header, Notes, Note, Beat, Tempo, ActivateNote, Octave, Scale } from "./types";
+import { SmfBinary, SmfData, Header, Notes, Beat, Tempo, ActivateNote, Octave, Scale } from "./types";
 
-const BYTE_SIGNAL_HEX = {
-  NOTE_OFF_START: 0x80,
-  NOTE_OFF_END: 0x8f,
-  NOTE_ON_START: 0x90,
-  NOTE_ON_END: 0x9f,
-  POLY_KEY_PRESSURE: 0xa0,
-  CONTROL_CHANGE: 0xb0,
-  PROGRAM_CHANGE: 0xc0,
-  CHANNEL_PRESSURE: 0xd0,
-  PITCH_BEND: 0xe0,
-  SYSEX_EVENT: 0xf0,
-  SYSEX_EVENT_END: 0xf7,
-  META_EVENT: 0xff,
+// MIDIイベントタイプ（上位4ビット）
+const MIDI_EVENT_TYPE = {
+  NOTE_OFF: 0x80,
+  NOTE_ON: 0x90,
+  POLY_KEY_PRESSURE: 0xA0,
+  CONTROL_CHANGE: 0xB0,
+  PROGRAM_CHANGE: 0xC0,
+  CHANNEL_PRESSURE: 0xD0,
+  PITCH_BEND: 0xE0,
+  META_EVENT: 0xFF,
 }
+
+// ビットマスク
+const EVENT_TYPE_MASK = 0xF0; // 上位4ビット（イベントタイプ）
+const CHANNEL_MASK = 0x0F;    // 下位4ビット（チャンネル）
 
 const META_EVENT_HEX = {
   TEXT: 0x01,
@@ -61,11 +62,6 @@ class BufferReader {
   }
 }
 
-// TODO: 可変超数値表現によるdeltaTimeの取得
-const getDeltaTime = (deltaTime: number): number => {
-  return 0;
-}
-
 const getHeader = (headerBinary: ArrayBuffer): Header => {
   const headerReader = new BufferReader(headerBinary);
   headerReader.addCursor(8); // skip "MThd" and header length
@@ -76,6 +72,7 @@ const getHeader = (headerBinary: ArrayBuffer): Header => {
 };
 
 const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], track:Notes[]} => {
+  console.log("getTrack");
   const tempos: Tempo[] = [], beats: Beat[] = [], track: Notes[] = Array.from({ length: 16 }, () => []);
   let deltaTime: number = 0; // tic time
   const trackReader = new BufferReader(trackBinary);
@@ -151,64 +148,68 @@ const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], trac
     deltaTime += delta;
     const statusByte = trackReader.readUint8(1);
 
-    switch (statusByte) {
-      case BYTE_SIGNAL_HEX.META_EVENT: {
-        const metaEvent = trackReader.readUint8(1);
-        if (metaEvent === META_EVENT_HEX.END_OF_TRACK) {
-          // console.log("end of track");
-          return { tempos, beats, track };
-        }
-        if (metaEventHandlers[metaEvent]) {
-          metaEventHandlers[metaEvent]();
-        }
-        break;
+    // イベントタイプとチャンネルを取得
+    const eventType = statusByte & EVENT_TYPE_MASK;
+    const channel = statusByte & CHANNEL_MASK;
+
+    if (statusByte === MIDI_EVENT_TYPE.META_EVENT) {
+      const metaEvent = trackReader.readUint8(1);
+      if (metaEvent === META_EVENT_HEX.END_OF_TRACK) {
+      return { tempos, beats, track };
       }
-      case BYTE_SIGNAL_HEX.CONTROL_CHANGE: {
-        trackReader.addCursor(2);
-        break;
+      if (metaEventHandlers[metaEvent]) {
+      metaEventHandlers[metaEvent]();
       }
-      case BYTE_SIGNAL_HEX.PROGRAM_CHANGE: {
-        trackReader.addCursor(1);
-        break;
-      }
-      case BYTE_SIGNAL_HEX.PITCH_BEND: {
-        trackReader.addCursor(2);
-        break;
-      }
+      continue;
     }
 
-    // NOTE_OFFとNOTE_ONの処理のみswitchから分割
-    if (statusByte >= BYTE_SIGNAL_HEX.NOTE_OFF_START && statusByte <= BYTE_SIGNAL_HEX.NOTE_OFF_END) {
-      const channel:number = statusByte - 0x80;
-      const note: number = trackReader.readUint8(1);
-      const noteOffVelocity: number = trackReader.readUint8(1); // 多分使わないけど一応
-      const octave: Octave = Math.floor(note/12)-1 as Octave;
-      const scale: Scale = ScaleList[note % 12]
-      const activeNoteIndex = activeNotes.findIndex((activeNote) => {
-        return activeNote.scale === scale && activeNote.octave === octave && activeNote.channel === channel;
-      });
-      if (activeNoteIndex !== -1) {
-        const activeNote = activeNotes[activeNoteIndex];
-        track[channel].push({
-          scale: activeNote.scale,
-          octave: activeNote.octave,
-          timing: activeNote.timing,
-          length: deltaTime - activeNote.timing,
-          velocity: activeNote.velocity,
+    switch (eventType) {
+      case MIDI_EVENT_TYPE.CONTROL_CHANGE:
+        console.log("control change");
+        trackReader.addCursor(2);
+        break;
+      case MIDI_EVENT_TYPE.PROGRAM_CHANGE:
+        console.log("program change");
+        trackReader.addCursor(1);
+        break;
+      case MIDI_EVENT_TYPE.PITCH_BEND:
+        console.log("pitch bend");
+        trackReader.addCursor(2);
+        break;
+      case MIDI_EVENT_TYPE.NOTE_OFF: {
+        const note: number = trackReader.readUint8(1);
+        const noteOffVelocity: number = trackReader.readUint8(1); // 多分使わないけど一応
+        const octave: Octave = Math.floor(note/12)-1 as Octave;
+        const scale: Scale = ScaleList[note % 12]
+        const activeNoteIndex = activeNotes.findIndex((activeNote) => {
+          return activeNote.scale === scale && activeNote.octave === octave && activeNote.channel === channel;
         });
-        activeNotes.splice(activeNoteIndex, 1);
+          if (activeNoteIndex !== -1) {
+            const activeNote = activeNotes[activeNoteIndex];
+            track[channel].push({
+            scale: activeNote.scale,
+            octave: activeNote.octave,
+            timing: activeNote.timing,
+            length: deltaTime - activeNote.timing,
+            velocity: activeNote.velocity,
+            });
+            activeNotes.splice(activeNoteIndex, 1);
+          }
+        break;
       }
+      case MIDI_EVENT_TYPE.NOTE_ON: {
+        console.log("NOTE_ON");
+        const note: number = trackReader.readUint8(1);
+        const velocity: number = trackReader.readUint8(1);
+        // note=30(16進数)が3C(scale=C, octave=3)を基準に
+        const octave: Octave = Math.floor(note/12)-1 as Octave;
+        const scale: Scale = ScaleList[note % 12];
+        activeNotes.push({ scale, octave, timing: deltaTime, velocity, channel });
+        break;
+      }
+      default:
+        break;
     }
-    if (statusByte >= BYTE_SIGNAL_HEX.NOTE_ON_START && statusByte <= BYTE_SIGNAL_HEX.NOTE_ON_END) {
-      const channel = statusByte - 0x90;
-      const note: number = trackReader.readUint8(1);
-      const velocity: number = trackReader.readUint8(1);
-      // note=30(16進数)が3C(scale=C, octave=3)を基準に
-      const octave: Octave = Math.floor(note/12)-1 as Octave;
-      const scale: Scale = ScaleList[note % 12];
-      activeNotes.push({ scale, octave, timing: deltaTime, velocity, channel });
-    }
-    // console.log(tempos, beats, notes);
   }
   return { tempos, beats, track };
 };
@@ -218,7 +219,6 @@ export const analyze = (smfBinary: SmfBinary): SmfData => {
   const tempos: Tempo[] = [];
   const beats: Beat[] = [];
   const track: Notes[] = Array.from({ length: 16 }, () => []);
-  console.log(track);
   for (const trackBinary of smfBinary.trackBinarys) {
     const analyzedTrack = getTrack(trackBinary);
     tempos.push(...analyzedTrack.tempos);

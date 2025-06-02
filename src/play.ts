@@ -83,9 +83,10 @@ export class SmfPlayer {
     this.startTime = this.audioContext.currentTime;
 
     // すべての音符をスケジュール
-    this.smfData.track.forEach(notes => {
+    this.smfData.track.forEach((notes, idx) => {
+      if (idx === 9) return; // ドラムパートはスキップ
       notes.forEach(n => {
-        this.playNote(n, this.startTime);
+      this.playNote(n, this.startTime);
       });
     });
 
