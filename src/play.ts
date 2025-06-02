@@ -31,7 +31,7 @@ export class SmfPlayer {
     if (!this.audioContext) return;
 
     const division = this.smfData.header.division;
-    const tempos = this.smfData.track.tempos;
+    const tempos = this.smfData.tempos;
     const tempo = tempos.reduce((prev, curr) => {
       return curr.timing <= note.timing ? curr.bpm : prev;
     }, tempos[0].bpm);
@@ -83,8 +83,10 @@ export class SmfPlayer {
     this.startTime = this.audioContext.currentTime;
 
     // すべての音符をスケジュール
-    this.smfData.track.notes.forEach(note => {
-      this.playNote(note, this.startTime);
+    this.smfData.track.forEach(notes => {
+      notes.forEach(n => {
+        this.playNote(n, this.startTime);
+      });
     });
 
     console.log('再生開始');

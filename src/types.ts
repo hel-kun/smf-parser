@@ -18,12 +18,10 @@ export type ActivateNote = {
   octave: Octave;
   timing: number;
   velocity: number;
+  channel: number;
 }
 
 export type Octave = -1 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
-// export function isOctave(octave:number): octave is Octave {
-//   return [0,1,2,3,4,5,6,7].includes(octave)
-// }
 
 export type Tempo = {
   bpm: number;
@@ -35,11 +33,7 @@ export type Beat = {
   timing: number;
 }
 
-export type Track = {
-  tempos: Tempo[];
-  beats: Beat[];
-  notes: Note[];
-}
+export type Notes = Note[];
 
 export type Header = {
   format: number;
@@ -49,5 +43,7 @@ export type Header = {
 
 export type SmfData = {
   header: Header;
-  track: Track;
+  tempos: Tempo[];
+  beats: Beat[];
+  track: Notes[];
 }

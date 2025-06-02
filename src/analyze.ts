@@ -1,8 +1,10 @@
-import { SmfBinary, SmfData, Header, Track, Note, Beat, Tempo, ActivateNote, Octave, Scale } from "./types";
+import { SmfBinary, SmfData, Header, Notes, Note, Beat, Tempo, ActivateNote, Octave, Scale } from "./types";
 
 const BYTE_SIGNAL_HEX = {
-  NOTE_OFF: 0x80,
-  NOTE_ON: 0x90,
+  NOTE_OFF_START: 0x80,
+  NOTE_OFF_END: 0x8f,
+  NOTE_ON_START: 0x90,
+  NOTE_ON_END: 0x9f,
   POLY_KEY_PRESSURE: 0xa0,
   CONTROL_CHANGE: 0xb0,
   PROGRAM_CHANGE: 0xc0,
@@ -73,8 +75,8 @@ const getHeader = (headerBinary: ArrayBuffer): Header => {
   return { format, tracks, division };
 };
 
-const getTrack = (trackBinary: ArrayBuffer): Track => {
-  const tempos: Tempo[] = [], beats: Beat[] = [], notes: Note[] = [];
+const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], track:Notes[]} => {
+  const tempos: Tempo[] = [], beats: Beat[] = [], track: Notes[] = Array.from({ length: 16 }, () => []);
   let deltaTime: number = 0; // tic time
   const trackReader = new BufferReader(trackBinary);
   trackReader.addCursor(8); // skip "MTrk" and track length
@@ -149,13 +151,12 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
     deltaTime += delta;
     const statusByte = trackReader.readUint8(1);
 
-    // TODO: この下を実装する
     switch (statusByte) {
       case BYTE_SIGNAL_HEX.META_EVENT: {
         const metaEvent = trackReader.readUint8(1);
         if (metaEvent === META_EVENT_HEX.END_OF_TRACK) {
           // console.log("end of track");
-          return { tempos, beats, notes };
+          return { tempos, beats, track };
         }
         if (metaEventHandlers[metaEvent]) {
           metaEventHandlers[metaEvent]();
@@ -174,53 +175,62 @@ const getTrack = (trackBinary: ArrayBuffer): Track => {
         trackReader.addCursor(2);
         break;
       }
-      case BYTE_SIGNAL_HEX.NOTE_ON: {
-        const note: number = trackReader.readUint8(1);
-        const velocity: number = trackReader.readUint8(1);
-        // note=30(16進数)が3C(scale=C, octave=3)を基準に
-        const octave: Octave = Math.floor(note/12)-1 as Octave;
-        const scale: Scale = ScaleList[note % 12];
-        activeNotes.push({ scale, octave, timing: deltaTime, velocity });
-        break;
-      }
-      case BYTE_SIGNAL_HEX.NOTE_OFF: {
-        const note: number = trackReader.readUint8(1);
-        const noteOffVelocity: number = trackReader.readUint8(1); // 多分使わない
-        const octave: Octave = Math.floor(note/12)-1 as Octave;
-        const scale: Scale = ScaleList[note % 12]
-        const activeNoteIndex = activeNotes.findIndex((activeNote) => {
-          return activeNote.scale === scale && activeNote.octave === octave;
+    }
+
+    // NOTE_OFFとNOTE_ONの処理のみswitchから分割
+    if (statusByte >= BYTE_SIGNAL_HEX.NOTE_OFF_START && statusByte <= BYTE_SIGNAL_HEX.NOTE_OFF_END) {
+      const channel:number = statusByte - 0x80;
+      const note: number = trackReader.readUint8(1);
+      const noteOffVelocity: number = trackReader.readUint8(1); // 多分使わないけど一応
+      const octave: Octave = Math.floor(note/12)-1 as Octave;
+      const scale: Scale = ScaleList[note % 12]
+      const activeNoteIndex = activeNotes.findIndex((activeNote) => {
+        return activeNote.scale === scale && activeNote.octave === octave && activeNote.channel === channel;
+      });
+      if (activeNoteIndex !== -1) {
+        const activeNote = activeNotes[activeNoteIndex];
+        track[channel].push({
+          scale: activeNote.scale,
+          octave: activeNote.octave,
+          timing: activeNote.timing,
+          length: deltaTime - activeNote.timing,
+          velocity: activeNote.velocity,
         });
-        if (activeNoteIndex !== -1) {
-          const activeNote = activeNotes[activeNoteIndex];
-          notes.push({
-            scale: activeNote.scale,
-            octave: activeNote.octave,
-            timing: activeNote.timing,
-            length: deltaTime - activeNote.timing,
-            velocity: activeNote.velocity,
-          });
-          activeNotes.splice(activeNoteIndex, 1);
-        }
-        break;
+        activeNotes.splice(activeNoteIndex, 1);
       }
+    }
+    if (statusByte >= BYTE_SIGNAL_HEX.NOTE_ON_START && statusByte <= BYTE_SIGNAL_HEX.NOTE_ON_END) {
+      const channel = statusByte - 0x90;
+      const note: number = trackReader.readUint8(1);
+      const velocity: number = trackReader.readUint8(1);
+      // note=30(16進数)が3C(scale=C, octave=3)を基準に
+      const octave: Octave = Math.floor(note/12)-1 as Octave;
+      const scale: Scale = ScaleList[note % 12];
+      activeNotes.push({ scale, octave, timing: deltaTime, velocity, channel });
     }
     // console.log(tempos, beats, notes);
   }
-  return { tempos, beats, notes };
+  return { tempos, beats, track };
 };
 
 export const analyze = (smfBinary: SmfBinary): SmfData => {
   const header = getHeader(smfBinary.headerBinary);
-  const track: Track = {tempos: [], beats: [], notes: []};
+  const tempos: Tempo[] = [];
+  const beats: Beat[] = [];
+  const track: Notes[] = Array.from({ length: 16 }, () => []);
+  console.log(track);
   for (const trackBinary of smfBinary.trackBinarys) {
     const analyzedTrack = getTrack(trackBinary);
-    track.tempos.push(...analyzedTrack.tempos);
-    track.beats.push(...analyzedTrack.beats);
-    track.notes.push(...analyzedTrack.notes);
+    tempos.push(...analyzedTrack.tempos);
+    beats.push(...analyzedTrack.beats);
+    for (let i = 0; i < track.length; i++) {
+      track[i].push(...analyzedTrack.track[i]);
+    }
   }
   return {
     header: header,
+    tempos: tempos,
+    beats: beats,
     track: track,
   };
 };

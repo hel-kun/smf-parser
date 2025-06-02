@@ -141,9 +141,9 @@
   <pre id="output">SMFデータがここに表示されます</pre>
 
   <script type="module">
-    import { parse } from '../dist/src/parse.js';
-    import { analyze } from '../dist/src/analyze.js';
-    import { SmfPlayer } from '../dist/src/play.js';
+    import { parse } from '../dist/parse.js';
+    import { analyze } from '../dist/analyze.js';
+    import { SmfPlayer } from '../dist/play.js';
 
     let smfData = null;
     let player = null;
@@ -177,12 +177,15 @@
         const smfBinary = await parse(file);
         smfData = analyze(smfBinary);
         
+        // 全トラックの音符数を計算
+        const totalNotes = smfData.track.reduce((sum, notes) => sum + notes.length, 0);
+        
         // SMF情報の表示
         smfInfo.innerHTML = `
           <p><strong>フォーマット:</strong> ${smfData.header.format}</p>
           <p><strong>トラック数:</strong> ${smfData.header.tracks}</p>
           <p><strong>分解能:</strong> ${smfData.header.division} ticks/拍</p>
-          <p><strong>音符数:</strong> ${smfData.track.notes.length}</p>
+          <p><strong>音符数:</strong> ${totalNotes}</p>
         `;
         
         // 詳細データの表示
@@ -261,19 +264,24 @@
     
     // ピアノロールの描画関数
     function renderPianoRoll(smfData) {
-      if (!smfData || !smfData.track.notes.length) return;
+      if (!smfData || smfData.track.length === 0) return;
       
       pianoRoll.innerHTML = '';
       
+      // すべてのトラックのノートを結合
+      const allNotes = smfData.track.flat();
+      
+      if (allNotes.length === 0) return;
+      
       // 最大タイミングを取得
-      const maxTiming = Math.max(...smfData.track.notes.map(note => note.timing + note.length));
+      const maxTiming = Math.max(...allNotes.map(note => note.timing + note.length));
       
       // スケーリング係数
       const timeScale = pianoRoll.clientWidth / maxTiming;
       const noteHeight = 10;
       
       // 音符の描画
-      smfData.track.notes.forEach((note, index) => {
+      allNotes.forEach((note, index) => {
         const noteBar = document.createElement('div');
         noteBar.className = 'note-bar';
         
