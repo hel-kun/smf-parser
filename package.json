@@ -1,6 +1,6 @@
 {
   "name": "smf-parser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "smf parser",
   "main": "index.js",
   "types": "dist/src/index.d.ts",
