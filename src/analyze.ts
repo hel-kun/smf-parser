@@ -72,7 +72,6 @@ const getHeader = (headerBinary: ArrayBuffer): Header => {
 };
 
 const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], track:Notes[]} => {
-  console.log("getTrack");
   const tempos: Tempo[] = [], beats: Beat[] = [], track: Notes[] = Array.from({ length: 16 }, () => []);
   let deltaTime: number = 0; // tic time
   const trackReader = new BufferReader(trackBinary);
@@ -165,15 +164,12 @@ const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], trac
 
     switch (eventType) {
       case MIDI_EVENT_TYPE.CONTROL_CHANGE:
-        console.log("control change");
         trackReader.addCursor(2);
         break;
       case MIDI_EVENT_TYPE.PROGRAM_CHANGE:
-        console.log("program change");
         trackReader.addCursor(1);
         break;
       case MIDI_EVENT_TYPE.PITCH_BEND:
-        console.log("pitch bend");
         trackReader.addCursor(2);
         break;
       case MIDI_EVENT_TYPE.NOTE_OFF: {
@@ -198,7 +194,6 @@ const getTrack = (trackBinary: ArrayBuffer): {tempos:Tempo[], beats:Beat[], trac
         break;
       }
       case MIDI_EVENT_TYPE.NOTE_ON: {
-        console.log("NOTE_ON");
         const note: number = trackReader.readUint8(1);
         const velocity: number = trackReader.readUint8(1);
         // note=30(16進数)が3C(scale=C, octave=3)を基準に
