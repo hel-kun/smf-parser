@@ -1,12 +1,20 @@
-import { SmfBinary } from "@/types";
-
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { SmfBinary } from "./types";
 
 const readBinary = async (file: File): Promise<ArrayBuffer> => {
-  const filePath = join(__dirname, file.name);
-  const buffer = await fs.readFile(filePath);
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to read file as ArrayBuffer'));
+      }
+    };
+    reader.onerror = () => {
+      reject(new Error('Error reading file'));
+    };
+    reader.readAsArrayBuffer(file);
+  });
 };
 
 const searchBinary = (buffer: ArrayBuffer, target: Uint8Array): number[] => {
